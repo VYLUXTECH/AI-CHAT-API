@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+data/
+*.log
+.env
+bridge.log
+qg.log
+node_modules/
