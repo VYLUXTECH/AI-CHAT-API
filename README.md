@@ -50,3 +50,37 @@ Models: `qwen3.7-plus`, `qwen3.8-max`, `qwen3.8-omni-flash` · `gpt-6`, `gpt-6-m
 
 `main.py` is the legacy DeepSeek engine kept for reference.
 `tokens/fallback-routes.json`-style free relays are planned as the next fallback layer.
+
+---
+
+# Container port (`container/`) — headless Node
+
+Pure-HTTP bridge to **chat.qwen.ai** rewritten for the box (runs as a mux child,
+zero npm deps). Chrome is gone from the runtime: the JWT (+ optional cookie jar)
+is read per-request from `state.json` — refresh it whenever it nears expiry
+(tokens last ~15 min).
+
+## Run
+
+```bash
+node container/server.js          # PORT env (container mux assigns :21690)
+```
+
+| Route | Description |
+|---|---|
+| `POST /v1/chat/completions` | OpenAI-compatible chat (stream & non-stream), models `qwen3.7-plus`, `qwen3.8-max`, `qwen3.8-omni-flash` |
+| `GET /v1/models` | Catalog (gpt ids listed but unavailable headless) |
+| `GET /v1/health` | Token expiry + session status |
+
+`container/state.json` (see `state.example.json`): `{ token, cookies, ua }` —
+read lazily on every request, so updating it needs no restart.
+
+## Session keep-alive (`scripts/`)
+
+`harvest.js` pulls `localStorage.token` + cookies + UA from a logged-in Chrome
+via CDP (`:9222`); `refresh-token.sh` harvests and pushes `state.json` to the
+container over SFTP. Deployed pattern: Chrome under Xvfb with full VNC login
+(`aichatapi.sh`), then a cron `*/5 * * * * /root/aichat/refresh-token.sh`.
+
+Public endpoint (deployed): `https://aichat.vyluxtech.com/v1/{models,health,chat/completions}`
+— Cloudflare `apix-bridge` → container mux (host `aichat.*`) → AICHAT child.
